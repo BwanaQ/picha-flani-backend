@@ -17,6 +17,8 @@ import cloudinary.api
 from dotenv import load_dotenv
 
 load_dotenv()
+
+AUTH_USER_MODEL = 'users.CustomUser'
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -47,6 +49,7 @@ INSTALLED_APPS = [
     'cloudinary',
     # My Apps
     'photos.apps.PhotosConfig',
+    'users.apps.UsersConfig',
 ]
 
 MIDDLEWARE = [
@@ -137,3 +140,6 @@ cloudinary.config(
   api_key = os.getenv('CLOUDINARY_API_KEY'), 
   api_secret = os.getenv('CLOUDINARY_API_SECRET') 
 )
+
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+MEDIA_URL = '/media/'
