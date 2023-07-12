@@ -5,6 +5,7 @@ from cloudinary import CloudinaryImage
 
 class Photo(models.Model):
     title = models.CharField(max_length=100)
+    description = models.TextField()
     image = CloudinaryField('image')
     webp_image = CloudinaryField('image', format='webp',blank=True)
     price = models.IntegerField()
