@@ -52,7 +52,7 @@ class STKPushAPIView(APIView):
             return Response(str(e), status=status.HTTP_400_BAD_REQUEST)
 
 
-class STKPushCallBackAPIView(APIView):
+class MPESACallBackAPIView(APIView):
     """
     API view for handling STK push callback notifications.
     """

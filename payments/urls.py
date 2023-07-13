@@ -7,5 +7,5 @@ app_name = "payments"
 
 urlpatterns = [
     path("stk_push/", views.STKPushAPIView.as_view(), name="stk-push"),
-    path("mpesa_callback/", views.STKPushCallBackAPIView.as_view(), name="mpesa-callback"),
+    path("mpesa_callback/", views.MPESACallBackAPIView.as_view(), name="mpesa-callback"),
 ]
