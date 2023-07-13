@@ -31,10 +31,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG =  os.getenv('DEBUG')
 
-ALLOWED_HOSTS = []
-CORS_ALLOWED_ORIGINS = ["http://localhost:8080",]
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
+CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', '').split(',')
 
 # Application definition
 
