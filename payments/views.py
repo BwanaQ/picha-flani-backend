@@ -4,8 +4,7 @@ from rest_framework.response import Response
 from rest_framework import  status
 from rest_framework.views import APIView
 
-from django_daraja.mpesa.core import MpesaClient
-
+from payments.tasks import perform_stk_push
 
 class STKPushAPIView(APIView):
     """
@@ -44,12 +43,9 @@ class STKPushAPIView(APIView):
         if not all([phone_number, amount, account_reference, transaction_desc, callback_url]):
             return Response("Missing required parameters", status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            mpesa_client = MpesaClient()
-            response = mpesa_client.stk_push(phone_number, amount, account_reference, transaction_desc, callback_url)
-            return Response(response, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response(str(e), status=status.HTTP_400_BAD_REQUEST)
+        perform_stk_push.delay(phone_number, amount, account_reference, transaction_desc, callback_url)
+
+        return Response("STK push initiated", status=status.HTTP_200_OK)
 
 
 class MPESACallBackAPIView(APIView):
