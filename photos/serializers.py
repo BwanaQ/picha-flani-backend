@@ -13,4 +13,4 @@ class UserSerializer(serializers.ModelSerializer):
 class PhotoSerializer(serializers.ModelSerializer):
 	class Meta:
 		model = Photo
-		fields = ('title', 'image', 'price', 'owner')
+		fields = ('title', 'description','webp_image','image', 'price', 'owner')
