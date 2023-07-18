@@ -1,2 +1,2 @@
 # Picha Flani Backend
-[![.github/workflows/django.yml](https://github.com/BwanaQ/picha-flani-backend/actions/workflows/django.yml/badge.svg)](https://github.com/BwanaQ/picha-flani-backend/actions/workflows/django.yml)
+[![.github/workflows/django.yml](https://github.com/BwanaQ/picha-flani-backend/actions/workflows/django.yml/badge.svg?event=push)](https://github.com/BwanaQ/picha-flani-backend/actions/workflows/django.yml)
