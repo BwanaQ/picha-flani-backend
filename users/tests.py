@@ -29,9 +29,6 @@ class UserRegisterViewTest(TestCase):
         self.client = APIClient()
         # No Authorization header needed
         self.headers = {
-            # 'HTTP_X_RAPIDAPI_HOST': HTTP_X_RAPIDAPI_HOST,
-            # 'HTTP_X_RAPIDAPI_PROXY_SECRET': HTTP_X_RAPIDAPI_PROXY_SECRET,
-            # 'HTTP_X_RAPIDAPI_SUBSCRIPTION': HTTP_X_RAPIDAPI_SUBSCRIPTION
         }
         self.client.credentials(**self.headers)
 
@@ -87,10 +84,9 @@ class ObtainEmailAuthTokenTest(TestCase):
         )
 
         decoded_user_id = decode_token(response.json()['data']['token'])['id']
-        # profile_obj = Profile.objects.all()
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue('token' in response.data)
-
         self.assertTrue('token' in response.json()['data'])
         self.assertEqual(decoded_user_id, str(self.user.id))
 
