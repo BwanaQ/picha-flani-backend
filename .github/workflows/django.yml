@@ -36,6 +36,12 @@ jobs:
         echo "CORS_ALLOWED_ORIGINS=http://localhost,http://127.0.0.1" >> .env
         echo "SECRET_KEY=test" >> .env
 
+    - name: Make check_and_apply_migrations.sh executable
+      run: chmod +x check_and_apply_migrations.sh
+  
+    - name: Check and apply migrations
+      run: ./check_and_apply_migrations.sh
+
     - name: Run Tests
       run: |
         python manage.py test
