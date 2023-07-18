@@ -1,0 +1,71 @@
+version: '3'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - 8000:8000
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
+      - celery-worker
+    restart: always
+
+  db:
+    image: postgres:12
+    ports:
+      - 5434:5434
+    env_file:
+      - .env.db
+    command: -p 5434
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "db", "-p", "5434", "-U", "$DB_USER"]
+      interval: 5s
+      retries: 10
+    volumes:
+      - db_data:/var/lib/postgresql/data/
+      - static_volume:/home/app/webapp/staticfiles/
+
+  redis:
+    image: redis:latest
+    ports:
+      - 6380:6380
+    restart: always
+
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    command: celery -A core worker --loglevel=info --concurrency=4
+    restart: always
+
+  flower:
+    image: mher/flower:0.9.7
+    command: ['flower', '--broker=redis://redis:6380', '--port=5555']
+    expose:
+      - 5555
+    depends_on:
+      - redis
+
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx.dockerfile
+    ports:
+      - 80:80
+    depends_on:
+      - web
+      - flower
+    restart: always
+    volumes:
+      - static_volume:/home/app/webapp/staticfiles/
+
+volumes:
+  db_data:
+  static_volume:

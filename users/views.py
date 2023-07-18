@@ -1,98 +1,229 @@
+import json
+import logging
+from django.utils.translation import gettext_lazy as _
+from django.http import Http404
+from django.core.exceptions import ValidationError
+from django.core.exceptions import ObjectDoesNotExist
 
-from django.contrib.auth import get_user_model
-from rest_framework import status
-from rest_framework.generics import GenericAPIView, RetrieveUpdateAPIView
-from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework import generics
+from rest_framework.views import APIView
+from rest_framework import status
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.generics import RetrieveUpdateAPIView
 
-from . import serializers
-from .models import Profile
+from users.renderers import APIJSONRenderer
+from users.models import User
+from users.utilities.email import send_email_to_user
 
-User = get_user_model()
 
-class UserRegisterationAPIView(GenericAPIView):
+from users.serializers import (
+    UserRegisterSerializer,
+    LoginSerializer,
+    UserSerializer,
+)
+
+
+logger = logging.getLogger(__name__)
+
+
+class UserRetrieveUpdateAPIView(RetrieveUpdateAPIView):
     """
-    An endpoint for the client to create a new User.
-    """
+    A view that provides retrieve and update capabilities for a user model.
+    To retrieve user data, use GET method, and to update user data, use PUT or PATCH method.
 
-    permission_classes = (AllowAny,)
-    serializer_class = serializers.UserRegisterationSerializer
+    To retrieve user data:
+        - You must be authenticated.
+        - Endpoint: users/detail/<int:pk>/
 
-    def post(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = serializer.save()
-        token = RefreshToken.for_user(user)
-        data = serializer.data
-        data["tokens"] = {"refresh": str(token), "access": str(token.access_token)}
-        return Response(data, status=status.HTTP_201_CREATED)
+    To update user data:
+        - You must be authenticated.
+        - Endpoint: users/detail/<int:pk>/
+        - Data: {"user": {... updated user data ...}}
 
-class UserLoginAPIView(GenericAPIView):
-    """
-    An endpoint to authenticate existing users using their email and password.
-    """
-
-    permission_classes = (AllowAny,)
-    serializer_class = serializers.UserLoginSerializer
-
-    def post(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = serializer.validated_data
-        serializer = serializers.CustomUserSerializer(user)
-        token = RefreshToken.for_user(user)
-        data = serializer.data
-        data["tokens"] = {"refresh": str(token), "access": str(token.access_token)}
-        return Response(data, status=status.HTTP_200_OK)
-
-class UserLogoutAPIView(GenericAPIView):
-    """
-    An endpoint to logout users.
     """
 
     permission_classes = (IsAuthenticated,)
+    serializer_class = UserSerializer
+    renderer_classes = (APIJSONRenderer,)
 
-    def post(self, request, *args, **kwargs):
+    def retrieve(self, request, *args, **kwargs):
+        """
+        Retrieve and return the current authenticated user's data
+        """
+        serializer = self.serializer_class(request.user)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def update(self, request, *args, **kwargs):
+        """
+        Update and return the current authenticated user's data
+        """
+        serializer_data = request.data.get('user', {})
+
+        serializer = self.serializer_class(
+            request.user, data=serializer_data, partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class EmailComfirmationAPIView(APIView):
+    permission_classes = [IsAuthenticated,]
+    renderer_classes = (APIJSONRenderer,)
+
+    def get(request):
+        if request.user is None:
+            return Response({'error': 'Invalid user credentials.'}, status=status.HTTP_401_UNAUTHORIZED)
+        user = json.dumps(request.user)
+        return Response(request.user)
+
+
+class GetActiveUserAPIView(APIView):
+    permission_classes = [IsAuthenticated,]
+    renderer_classes = (APIJSONRenderer,)
+
+    def get(self, request):
+        if request.user is None:
+            return Response({'error': 'Invalid user credentials.'}, status=status.HTTP_401_UNAUTHORIZED)
+        serializer = LoginSerializer(request.user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class ChangePasswordView(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [APIJSONRenderer]
+
+    def post(self, request):
+        user = request.user
         try:
-            refresh_token = request.data["refresh"]
-            token = RefreshToken(refresh_token)
-            token.blacklist()
-            return Response(status=status.HTTP_205_RESET_CONTENT)
+            # Get the current and new passwords from the request data
+            current_password = request.data.get('current_password')
+            new_password = request.data.get('new_password')
+            # Verify if the current password is correct
+            if not user.check_password(current_password):
+                return Response({'error': 'Invalid current password'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Update the user's password with the new password
+            user.set_password(new_password)
+            user.save()
+            #TODO: Make this a background task.  send_email_to_user(user.get('email'))
+            serializer = LoginSerializer(user)
+            return Response(serializer.data, status=status.HTTP_200_OK)
         except Exception as e:
-            return Response(status=status.HTTP_400_BAD_REQUEST)
+            return Response(str(e), 400)
 
-class UserAPIView(RetrieveUpdateAPIView):
-    """
-    Get, Update user information
-    """
 
-    permission_classes = (IsAuthenticated,)
-    serializer_class = serializers.CustomUserSerializer
+class ChangeEmailView(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [APIJSONRenderer]
 
-    def get_object(self):
-        return self.request.user
+    def post(self, request):
+        user = request.user
+        try:
+            # Get the current and new email from the request data
+            current_email = request.data.get('current_email')
+            new_email = request.data.get('new_email')
 
-class UserProfileAPIView(RetrieveUpdateAPIView):
-    """
-    Get, Update user profile
-    """
+            if user.email == new_email:
+                return Response({'error': 'Invalid current email and new email are the same'}, status=status.HTTP_400_BAD_REQUEST)
 
-    queryset = Profile.objects.all()
-    serializer_class = serializers.ProfileSerializer
-    permission_classes = (IsAuthenticated,)
+            # Verify if the current email is correct
+            if user.email != current_email:
+                return Response({'error': 'Invalid current email'}, status=status.HTTP_400_BAD_REQUEST)
 
-    def get_object(self):
-        return self.request.user.profile
+            # Check if the new email already exists in the system
+            if User.objects.filter(email=new_email).exists():
+                return Response({'error': 'New email already exists'}, status=status.HTTP_400_BAD_REQUEST)
 
-class UserAvatarAPIView(RetrieveUpdateAPIView):
-    """
-    Get, Update user avatar
-    """
+            # Update the user's email with the new email
+            user.email = new_email
+            user.save()
 
-    queryset = Profile.objects.all()
-    serializer_class = serializers.ProfileAvatarSerializer
-    permission_classes = (IsAuthenticated,)
+            #TODO: Make this a background task.  send_email_to_user(user.get('email'))
+            serializer = LoginSerializer(user)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-    def get_object(self):
-        return self.request.user.profile
+
+class DeleteAccountAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [APIJSONRenderer]
+
+    def get(self, request):
+        user = request.user
+        try:
+            user.delete()
+            #TODO: Make this a background task.  send_email_to_user(user.get('email'))
+            return Response({'message': 'User deleted successfully'}, status=status.HTTP_200_OK)
+        except Exception as e:
+            # Handle any exception that occurs during user deletion
+            return Response(str(e), status=status.HTTP_400_BAD_REQUEST)
+
+
+class UpdateUserView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            user = request.user
+            name = request.data.get('name')
+
+            if name:
+                user.display_name = name
+                user.save()
+
+            serializer = UserSerializer(user)
+            return Response({'msg': 'Updated..', 'data': serializer.data}, status=status.HTTP_200_OK)
+        except ObjectDoesNotExist as e:
+            return Response({'msg': 'Unauthorized change profile', 'error': str(e)}, status=status.HTTP_401_UNAUTHORIZED)
+
+
+class UserLoginAPIView(APIView):
+    permission_classes = (AllowAny,)
+    serializer_class = LoginSerializer
+    renderer_classes = (APIJSONRenderer,)
+
+    def post(self, request):
+        user = {
+            "email": request.data.get('email'),
+            "password": request.data.get('password')
+        }
+
+        try:
+            serializer = self.serializer_class(data=user)
+            serializer.is_valid(raise_exception=True)
+
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Http404:
+            return Response({'error': 'User does not exist.'}, status=status.HTTP_404_NOT_FOUND)
+        except ValidationError:
+            return Response({'error': 'Invalid credentials.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+
+class UserRegisterAPIView(generics.CreateAPIView):
+    # Allow any user (authenticated or not) to hit this endpoint.
+    permission_classes = (AllowAny,)
+    serializer_class = UserRegisterSerializer
+    renderer_classes = (APIJSONRenderer,)
+
+    def post(self, request):
+        user = {
+            "email": request.data.get('email'),
+            "username": request.data.get('email'),
+            "password": request.data.get('password'),
+            "role": request.data.get('role')
+        }
+        serializer = self.serializer_class(data=user)
+
+        try:
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            #TODO: Make this a background task.send_email_to_user(user.get('email'))
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        except TypeError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
